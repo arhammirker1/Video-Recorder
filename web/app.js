@@ -23,10 +23,34 @@
   window.addEventListener('resize', () => { resize(); draw(); });
 })();
 
+// ── MIME Type Detection — run once at startup ────────────────────────────────
+// We probe every codec combo the browser supports and rank them by quality.
+// This avoids the bug where MediaRecorder accepts "video/mp4" but writes
+// corrupt data because the actual H.264/AAC muxer is missing at runtime.
+const SUPPORTED_MIMES = (() => {
+  const candidates = [
+    // WebM — universally well-supported in Chrome/Firefox
+    { mime: 'video/webm;codecs=vp9,opus',  label: 'WebM / VP9+Opus',   ext: 'webm', group: 'webm' },
+    { mime: 'video/webm;codecs=vp8,opus',  label: 'WebM / VP8+Opus',   ext: 'webm', group: 'webm' },
+    { mime: 'video/webm;codecs=av1,opus',  label: 'WebM / AV1+Opus',   ext: 'webm', group: 'webm' },
+    { mime: 'video/webm',                  label: 'WebM (auto)',        ext: 'webm', group: 'webm' },
+    // MP4 — only reliable in Chrome 130+ with specific codec strings
+    { mime: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', label: 'MP4 / H.264+AAC', ext: 'mp4', group: 'mp4' },
+    { mime: 'video/mp4;codecs=avc1,mp4a.40.2',        label: 'MP4 / H.264+AAC', ext: 'mp4', group: 'mp4' },
+    { mime: 'video/mp4;codecs=h264,aac',               label: 'MP4 / H.264+AAC', ext: 'mp4', group: 'mp4' },
+    { mime: 'video/mp4',                               label: 'MP4 (auto)',       ext: 'mp4', group: 'mp4' },
+  ];
+  return candidates.filter(c => {
+    try { return MediaRecorder.isTypeSupported(c.mime); }
+    catch (_) { return false; }
+  });
+})();
+
 // ── State ─────────────────────────────────────────────────────────────────────
 const state = {
   // Camera recording
   stream: null,
+  cameraActive: false,          // whether camera is currently running
   mediaRecorder: null,
   chunks: [],
   isRecording: false,
@@ -37,10 +61,10 @@ const state = {
   sizeMonitor: null,
 
   // Screen recording
-  screenStream: null,           // display media stream
-  screenMicStream: null,        // microphone stream for screen rec
-  screenCamStream: null,        // camera overlay stream
-  screenAudioCtx: null,         // for mixing screen + mic audio
+  screenStream: null,
+  screenMicStream: null,
+  screenCamStream: null,
+  screenAudioCtx: null,
   screenRecorder: null,
   screenChunks: [],
   isScreenRecording: false,
@@ -50,7 +74,7 @@ const state = {
   screenTimerInterval: null,
   screenSizeMonitor: null,
   camOverlayVisible: false,
-  mixedStream: null,            // final mixed stream for recording
+  mixedStream: null,
 
   // Audio meter
   audioCtx: null,
@@ -92,6 +116,8 @@ const selectFormat      = $('select-format');
 const btnRecord         = $('btn-record');
 const btnPause          = $('btn-pause');
 const btnStop           = $('btn-stop');
+const btnCameraOff      = $('btn-camera-off');
+const btnCameraOn       = $('btn-camera-on');
 const recBadge          = $('rec-badge');
 const recTimeBadge      = $('rec-time-badge');
 const timerDisplay      = $('timer-display');
@@ -123,14 +149,15 @@ const camOverlay            = $('cam-overlay');
 const camOverlayVideo       = $('cam-overlay-video');
 
 // Sidebar widgets
-const screenStatusDot   = $('screen-status-dot');
+const screenStatusDot    = $('screen-status-dot');
 const screenWidgetStatus = $('screen-widget-status');
-const screenWidgetSize  = $('screen-widget-size');
-const screenWidgetCam   = $('screen-widget-cam');
+const screenWidgetSize   = $('screen-widget-size');
+const screenWidgetCam    = $('screen-widget-cam');
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   loadSettings();
+  populateFormatSelects();
   await enumerateDevices();
   bindNavigation();
   bindControls();
@@ -139,6 +166,31 @@ async function init() {
   bindCamOverlayDrag();
   renderLibrary();
   updateQualityBadges();
+}
+
+// ── Populate format dropdowns with only actually-supported codecs ─────────────
+function populateFormatSelects() {
+  const selects = [selectFormat, screenSelectFormat];
+
+  if (SUPPORTED_MIMES.length === 0) {
+    // Nothing supported — add a single fallback option
+    selects.forEach(sel => {
+      sel.innerHTML = '<option value="">— No supported format —</option>';
+    });
+    return;
+  }
+
+  selects.forEach(sel => {
+    sel.innerHTML = '';
+    // Deduplicate by label so we don't show "MP4 / H.264+AAC" twice
+    const seen = new Set();
+    SUPPORTED_MIMES.forEach(({ mime, label }) => {
+      if (seen.has(label)) return;
+      seen.add(label);
+      const opt = new Option(label, mime);
+      sel.appendChild(opt);
+    });
+  });
 }
 
 // ── Device enumeration ────────────────────────────────────────────────────────
@@ -160,16 +212,12 @@ async function enumerateDevices() {
       const label = d.label || `${d.kind} (${d.deviceId.slice(0, 8)})`;
 
       if (d.kind === 'videoinput') {
-        const opt1 = new Option(label, d.deviceId);
-        const opt2 = new Option(label, d.deviceId);
-        selectVideo.appendChild(opt1);
-        screenSelectCamera.appendChild(opt2);
+        selectVideo.appendChild(new Option(label, d.deviceId));
+        screenSelectCamera.appendChild(new Option(label, d.deviceId));
       }
       if (d.kind === 'audioinput') {
-        const opt1 = new Option(label, d.deviceId);
-        const opt2 = new Option(label, d.deviceId);
-        selectAudio.appendChild(opt1);
-        screenSelectAudio.appendChild(opt2);
+        selectAudio.appendChild(new Option(label, d.deviceId));
+        screenSelectAudio.appendChild(new Option(label, d.deviceId));
       }
     });
 
@@ -187,7 +235,7 @@ async function enumerateDevices() {
 
 // ── Camera preview ────────────────────────────────────────────────────────────
 async function startPreview() {
-  if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+  stopPreview(); // release any existing stream first
 
   const [w, h] = state.settings.resolution.split('x').map(Number);
   const constraints = {
@@ -202,15 +250,53 @@ async function startPreview() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     state.stream = stream;
+    state.cameraActive = true;
     previewVideo.srcObject = stream;
     previewOverlay.classList.add('hidden');
     setupAudioMeter(stream);
     setStatus('Ready — select format and hit record', 'ready');
+    updateCameraButtons();
   } catch (err) {
+    state.cameraActive = false;
     previewOverlay.classList.remove('hidden');
     setStatus(`Stream error: ${err.message}`, 'idle');
     toast(`Camera/mic error: ${err.message}`, 'error');
+    updateCameraButtons();
   }
+}
+
+// ── Stop / release camera completely ─────────────────────────────────────────
+function stopPreview() {
+  if (state.stream) {
+    state.stream.getTracks().forEach(t => t.stop());
+    state.stream = null;
+  }
+  // Tear down audio meter
+  if (state.audioCtx) {
+    state.audioCtx.close().catch(() => {});
+    state.audioCtx = null;
+    state.analyser = null;
+  }
+  clearInterval(state.meterInterval);
+  state.meterInterval = null;
+
+  // Reset meter bars
+  $$('#meter-bars .meter-bar').forEach(bar => {
+    bar.style.height = '5%';
+    bar.classList.remove('active-low', 'active-mid', 'active-high');
+  });
+
+  previewVideo.srcObject = null;
+  state.cameraActive = false;
+  previewOverlay.classList.remove('hidden');
+  setStatus('Camera off — click ▶ to start camera', 'idle');
+  updateCameraButtons();
+}
+
+function updateCameraButtons() {
+  if (btnCameraOff)  btnCameraOff.style.display  = state.cameraActive ? 'flex' : 'none';
+  if (btnCameraOn)   btnCameraOn.style.display    = state.cameraActive ? 'none' : 'flex';
+  if (btnRecord)     btnRecord.disabled           = !state.cameraActive;
 }
 
 // ── Audio Meter ───────────────────────────────────────────────────────────────
@@ -247,20 +333,34 @@ async function startRecording() {
 
   if (state.settings.countdown > 0) await runCountdown(state.settings.countdown);
 
-  const mimeType = getBestMime(selectFormat.value);
+  // Get the selected mime, then verify it's truly supported
+  const selectedMime = selectFormat.value;
+  const mimeType = resolveMime(selectedMime);
+  if (!mimeType) {
+    toast('No supported recording format found in this browser.', 'error');
+    return;
+  }
+
   state.chunks = [];
 
+  let recorder;
   try {
-    state.mediaRecorder = new MediaRecorder(state.stream, {
+    recorder = new MediaRecorder(state.stream, {
       mimeType,
       videoBitsPerSecond: state.settings.videoBitrate,
       audioBitsPerSecond: 320000,
     });
-  } catch (err) { toast(`MediaRecorder error: ${err.message}`, 'error'); return; }
+  } catch (err) {
+    toast(`MediaRecorder error: ${err.message}`, 'error');
+    return;
+  }
 
-  state.mediaRecorder.ondataavailable = e => { if (e.data?.size > 0) state.chunks.push(e.data); };
-  state.mediaRecorder.onstop = () => finalizeRecording(state.chunks, state.mediaRecorder.mimeType, 'camera', state.startTime, state.pausedTime);
-  state.mediaRecorder.start(250);
+  state.mediaRecorder = recorder;
+  recorder.ondataavailable = e => { if (e.data?.size > 0) state.chunks.push(e.data); };
+  recorder.onstop = () => finalizeRecording(
+    state.chunks, recorder.mimeType, 'camera', state.startTime, state.pausedTime
+  );
+  recorder.start(250);
 
   state.isRecording = true;
   state.isPaused = false;
@@ -271,6 +371,8 @@ async function startRecording() {
   recBadge.classList.add('visible');
   btnPause.disabled = false;
   btnStop.disabled = false;
+  // Disable camera-off while actively recording
+  if (btnCameraOff) btnCameraOff.disabled = true;
   setStatus('● Recording…', 'recording-cam');
   startCamTimer();
   startCamSizeMonitor();
@@ -302,6 +404,7 @@ function stopRecording() {
   recBadge.classList.remove('visible');
   btnPause.disabled = true;
   btnStop.disabled = true;
+  if (btnCameraOff) btnCameraOff.disabled = false;
   btnPause.innerHTML = pauseIcon();
   stopCamTimer();
   clearInterval(state.sizeMonitor);
@@ -332,7 +435,6 @@ function startCamSizeMonitor() {
 
 // ── Screen Recording ──────────────────────────────────────────────────────────
 async function startScreenRecording() {
-  // 1. Get display media (screen + optional system audio)
   let screenStream;
   try {
     screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -358,17 +460,14 @@ async function startScreenRecording() {
   }
 
   state.screenStream = screenStream;
-
-  // Show screen in preview
   screenPreviewVideo.srcObject = screenStream;
   screenPreviewOverlay.classList.add('hidden');
 
-  // Listen for user stopping via browser UI
   screenStream.getVideoTracks()[0].addEventListener('ended', () => {
     if (state.isScreenRecording) stopScreenRecording();
   });
 
-  // 2. Get mic audio (optional)
+  // Mic audio
   let micStream = null;
   if (screenSelectAudio.value) {
     try {
@@ -389,23 +488,30 @@ async function startScreenRecording() {
     }
   }
 
-  // 3. Start camera overlay (optional)
+  // Camera overlay
   if (screenSelectCamera.value) {
     await startCamOverlay(screenSelectCamera.value);
   }
 
-  // 4. Build mixed audio stream
+  // Build mixed stream
   const finalStream = buildMixedStream(screenStream, micStream);
   state.mixedStream = finalStream;
 
-  // 5. Start MediaRecorder on mixed stream
   if (state.settings.countdown > 0) await runCountdown(state.settings.countdown);
 
-  const mimeType = getBestMime(screenSelectFormat.value);
+  const selectedMime = screenSelectFormat.value;
+  const mimeType = resolveMime(selectedMime);
+  if (!mimeType) {
+    toast('No supported recording format found in this browser.', 'error');
+    cleanupScreenStreams();
+    return;
+  }
+
   state.screenChunks = [];
 
+  let recorder;
   try {
-    state.screenRecorder = new MediaRecorder(finalStream, {
+    recorder = new MediaRecorder(finalStream, {
       mimeType,
       videoBitsPerSecond: state.settings.screenVideoBitrate,
       audioBitsPerSecond: 320000,
@@ -416,16 +522,18 @@ async function startScreenRecording() {
     return;
   }
 
-  state.screenRecorder.ondataavailable = e => { if (e.data?.size > 0) state.screenChunks.push(e.data); };
-  state.screenRecorder.onstop = () => finalizeRecording(state.screenChunks, state.screenRecorder.mimeType, 'screen', state.screenStartTime, state.screenPausedTime);
-  state.screenRecorder.start(250);
+  state.screenRecorder = recorder;
+  recorder.ondataavailable = e => { if (e.data?.size > 0) state.screenChunks.push(e.data); };
+  recorder.onstop = () => finalizeRecording(
+    state.screenChunks, recorder.mimeType, 'screen', state.screenStartTime, state.screenPausedTime
+  );
+  recorder.start(250);
 
   state.isScreenRecording = true;
   state.isScreenPaused = false;
   state.screenStartTime = Date.now();
   state.screenPausedTime = 0;
 
-  // UI updates
   btnScreenRecord.classList.add('recording');
   screenRecBadge.classList.add('visible');
   btnScreenPause.disabled = false;
@@ -441,20 +549,14 @@ async function startScreenRecording() {
   startScreenSizeMonitor();
 }
 
-/**
- * Build a combined video+audio stream from screen and optional mic.
- * Mixes screen system audio + mic via WebAudio.
- */
 function buildMixedStream(screenStream, micStream) {
   const videoTrack = screenStream.getVideoTracks()[0];
   const audioTracks = [...screenStream.getAudioTracks()];
 
-  // If no mic, just use screen's audio (or no audio)
   if (!micStream) {
     return new MediaStream([videoTrack, ...audioTracks]);
   }
 
-  // Mix screen audio + mic audio via AudioContext
   try {
     const ctx = new AudioContext({ sampleRate: 48000 });
     state.screenAudioCtx = ctx;
@@ -560,7 +662,6 @@ function stopScreenRecording() {
   clearInterval(state.screenSizeMonitor);
   screenSetStatus('Saving…', 'ready');
 
-  // Stop overlay
   showCamOverlay(false);
   cleanupScreenStreams();
 
@@ -591,7 +692,10 @@ function startScreenTimer() {
     screenRecTimeBadge.textContent = str.slice(3);
   }, 500);
 }
-function stopScreenTimer() { clearInterval(state.screenTimerInterval); timerDisplay.textContent = '00:00:00'; }
+function stopScreenTimer() {
+  clearInterval(state.screenTimerInterval);
+  timerDisplay.textContent = '00:00:00';
+}
 
 function startScreenSizeMonitor() {
   let prevBits = 0;
@@ -607,36 +711,58 @@ function startScreenSizeMonitor() {
 
 // ── Finalize (shared) ─────────────────────────────────────────────────────────
 function finalizeRecording(chunks, mimeType, type, startTime, pausedTime) {
-  mimeType = mimeType || 'video/webm';
-  const blob = new Blob(chunks, { type: mimeType });
+  if (!chunks || chunks.length === 0) {
+    toast('Recording was empty — no data captured.', 'error');
+    return;
+  }
+
+  // Determine the correct MIME type and extension
+  // IMPORTANT: use the mimeType that MediaRecorder actually used (recorder.mimeType),
+  // NOT the user-selected value, because the browser may have normalised it.
+  const effectiveMime = mimeType || 'video/webm';
+
+  // Derive extension from what the recorder actually produced
+  let ext = 'webm';
+  if (effectiveMime.startsWith('video/mp4')) ext = 'mp4';
+  else if (effectiveMime.startsWith('video/x-matroska')) ext = 'mkv';
+
+  const blob = new Blob(chunks, { type: effectiveMime });
   const url  = URL.createObjectURL(blob);
-  const ext  = mimeType.includes('mp4') ? 'mp4' : 'webm';
   const now  = new Date();
   const prefix = type === 'screen' ? 'VaultCam_Screen' : 'VaultCam_Camera';
   const name = `${prefix}_${formatDateFile(now)}.${ext}`;
-  const elapsed = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
+
+  const elapsed  = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
   const duration = formatTime(elapsed);
 
-  const rec = { id: Date.now(), name, blob, url, mimeType, duration, size: blob.size, date: now, type };
+  const rec = { id: Date.now(), name, blob, url, mimeType: effectiveMime, duration, size: blob.size, date: now, type };
   state.recordings.unshift(rec);
   renderLibrary();
 
   if (state.settings.autoDownload) downloadBlob(blob, name);
 
-  const targetStatus = type === 'screen' ? screenSetStatus : setStatus;
-  targetStatus(`Saved: ${name}`, 'ready');
-
-  if (type === 'camera') {
-    bitrateDisplay.textContent = '';
-    sizeDisplay.textContent = '';
-    timerDisplay.textContent = '00:00:00';
-  } else {
+  if (type === 'screen') {
+    screenSetStatus(`Saved: ${name}`, 'ready');
     screenBitrateDisplay.textContent = '';
     screenSizeDisplay.textContent = '';
     screenWidgetSize.textContent = '—';
+  } else {
+    setStatus(`Saved: ${name}`, 'ready');
+    bitrateDisplay.textContent = '';
+    sizeDisplay.textContent = '';
+    timerDisplay.textContent = '00:00:00';
   }
 
   toast(`${type === 'screen' ? '🖥' : '🎥'} Saved: ${name}`, 'success');
+}
+
+// ── MIME resolution — returns the actual mime string to use ──────────────────
+// If the chosen mime works, use it. Otherwise fall back to the best available.
+function resolveMime(preferred) {
+  if (preferred && MediaRecorder.isTypeSupported(preferred)) return preferred;
+  // fallback to first supported
+  if (SUPPORTED_MIMES.length > 0) return SUPPORTED_MIMES[0].mime;
+  return null;
 }
 
 // ── Countdown ─────────────────────────────────────────────────────────────────
@@ -657,28 +783,25 @@ function runCountdown(seconds) {
 function bindCamOverlayDrag() {
   const frame = $('screen-preview-frame');
   let dragging = false, resizing = false;
-  let startX, startY, startLeft, startTop, startW, startH;
+  let startX, startY, startLeft, startTop, startW;
 
-  // Drag
   camOverlay.addEventListener('mousedown', e => {
     if (e.target.closest('.cam-overlay-resize') ||
         e.target.closest('.cam-overlay-controls') ||
         e.target.closest('.cam-ctrl-btn')) return;
     dragging = true;
     startX = e.clientX; startY = e.clientY;
-    const rect = camOverlay.getBoundingClientRect();
+    const rect  = camOverlay.getBoundingClientRect();
     const pRect = frame.getBoundingClientRect();
     startLeft = rect.left - pRect.left;
     startTop  = rect.top  - pRect.top;
     e.preventDefault();
   });
 
-  // Resize
   $('cam-resize-handle').addEventListener('mousedown', e => {
     resizing = true;
-    startX = e.clientX; startY = e.clientY;
+    startX = e.clientX;
     startW = camOverlay.offsetWidth;
-    startH = camOverlay.offsetHeight;
     e.stopPropagation();
     e.preventDefault();
   });
@@ -699,14 +822,12 @@ function bindCamOverlayDrag() {
       const dx = e.clientX - startX;
       const newW = Math.max(100, Math.min(startW + dx, frameRect.width * 0.6));
       camOverlay.style.width = newW + 'px';
-      // Remove size class when manually resizing
       camOverlay.classList.remove('size-small', 'size-medium', 'size-large');
     }
   });
 
   document.addEventListener('mouseup', () => { dragging = false; resizing = false; });
 
-  // Corner snap buttons
   const snap = (corner) => {
     const pad = 16;
     camOverlay.style.left = 'auto'; camOverlay.style.top = 'auto';
@@ -765,7 +886,12 @@ function renderLibrary() {
 
 function deleteRecording(id) {
   const idx = state.recordings.findIndex(r => r.id === id);
-  if (idx > -1) { URL.revokeObjectURL(state.recordings[idx].url); state.recordings.splice(idx, 1); renderLibrary(); toast('Recording deleted', 'info'); }
+  if (idx > -1) {
+    URL.revokeObjectURL(state.recordings[idx].url);
+    state.recordings.splice(idx, 1);
+    renderLibrary();
+    toast('Recording deleted', 'info');
+  }
 }
 
 function openPlayer(rec) {
@@ -846,9 +972,29 @@ function bindNavigation() {
 
 // ── Control bindings ──────────────────────────────────────────────────────────
 function bindControls() {
-  btnRecord.addEventListener('click', () => { if (state.isRecording) stopRecording(); else startRecording(); });
+  btnRecord.addEventListener('click', () => {
+    if (state.isRecording) stopRecording();
+    else startRecording();
+  });
   btnPause.addEventListener('click', pauseRecording);
   btnStop.addEventListener('click', stopRecording);
+
+  // Camera on/off controls
+  if (btnCameraOff) {
+    btnCameraOff.addEventListener('click', () => {
+      if (state.isRecording) {
+        toast('Stop the current recording before turning off the camera.', 'info');
+        return;
+      }
+      stopPreview();
+      toast('Camera released', 'info');
+    });
+  }
+  if (btnCameraOn) {
+    btnCameraOn.addEventListener('click', () => {
+      startPreview();
+    });
+  }
 
   selectVideo.addEventListener('change', () => { if (!state.isRecording) startPreview(); });
   selectAudio.addEventListener('change', () => { if (!state.isRecording) startPreview(); });
@@ -899,17 +1045,6 @@ function bindScreenControls() {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function getBestMime(preferred) {
-  if (preferred && MediaRecorder.isTypeSupported(preferred)) return preferred;
-  const fallbacks = [
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm',
-    'video/mp4',
-  ];
-  return fallbacks.find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
-}
-
 function pauseIcon() {
   return `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
 }
@@ -939,7 +1074,9 @@ function downloadBlob(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
 

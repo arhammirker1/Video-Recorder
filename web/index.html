@@ -8,6 +8,58 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ── Camera on/off button styles ─────────────────────────── */
+    .cam-power-btn {
+      width: 36px; height: 36px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border2);
+      color: var(--text2); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: var(--transition);
+      flex-shrink: 0;
+    }
+    .cam-power-btn:hover:not(:disabled) { color: var(--text); }
+    .cam-power-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* Off button — red tint */
+    #btn-camera-off {
+      background: var(--red-dim);
+      border-color: var(--red);
+      color: var(--red);
+    }
+    #btn-camera-off:hover:not(:disabled) {
+      background: rgba(255,71,71,0.25);
+      box-shadow: 0 0 10px rgba(255,71,71,0.25);
+    }
+
+    /* On button — green tint */
+    #btn-camera-on {
+      background: rgba(71,255,140,0.1);
+      border-color: #47ff8a;
+      color: #47ff8a;
+      display: none; /* hidden by default; shown when cam is off */
+    }
+    #btn-camera-on:hover:not(:disabled) {
+      background: rgba(71,255,140,0.2);
+      box-shadow: 0 0 10px rgba(71,255,140,0.2);
+    }
+
+    /* Camera controls group label */
+    .cam-power-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    .cam-power-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--text3);
+      text-align: center;
+    }
+  </style>
 </head>
 <body>
   <canvas id="noise-canvas"></canvas>
@@ -187,9 +239,7 @@
             <label class="control-label">FORMAT</label>
             <div class="select-wrapper">
               <select id="select-format" class="fancy-select">
-                <option value="video/webm;codecs=vp9,opus">WebM / VP9</option>
-                <option value="video/webm;codecs=vp8,opus">WebM / VP8</option>
-                <option value="video/mp4">MP4</option>
+                <!-- populated dynamically by app.js based on browser support -->
               </select>
             </div>
           </div>
@@ -209,6 +259,28 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
             </button>
           </div>
+
+          <!-- ── Camera power controls ───────────────────────────── -->
+          <div class="cam-power-group">
+            <!-- Turn camera OFF — releases hardware, kills indicator light -->
+            <button id="btn-camera-off" class="cam-power-btn" title="Turn camera off (release hardware)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <!-- Camera body -->
+                <path d="M23 7l-7 5 7 5V7z"/>
+                <rect x="1" y="5" width="15" height="14" rx="2"/>
+                <!-- Diagonal slash -->
+                <line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" stroke-width="2"/>
+              </svg>
+            </button>
+            <!-- Turn camera ON -->
+            <button id="btn-camera-on" class="cam-power-btn" title="Start camera">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 7l-7 5 7 5V7z"/>
+                <rect x="1" y="5" width="15" height="14" rx="2"/>
+              </svg>
+            </button>
+            <span class="cam-power-label">CAM</span>
+          </div>
         </div>
 
         <div class="status-bar">
@@ -222,14 +294,9 @@
 
       <!-- ── Screen Record Panel ──────────────────────────────────── -->
       <section class="panel" id="panel-screen">
-        <!-- Screen preview area -->
         <div class="preview-wrapper screen-preview-wrapper">
           <div class="preview-frame screen-preview-frame" id="screen-preview-frame">
-
-            <!-- Screen feed -->
             <video id="screen-preview-video" autoplay muted playsinline></video>
-
-            <!-- Idle overlay -->
             <div class="preview-overlay" id="screen-preview-overlay">
               <div class="preview-placeholder">
                 <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M9 8l3 3 3-3" stroke-width="1.5"/></svg>
@@ -237,14 +304,11 @@
                 <p class="placeholder-sub">Click Start Capture to choose what to record</p>
               </div>
             </div>
-
-            <!-- REC badge -->
             <div class="rec-badge screen-rec-badge" id="screen-rec-badge">
               <span class="rec-dot screen-dot"></span>
               <span>SCREEN REC</span>
               <span id="screen-rec-time-badge">00:00</span>
             </div>
-
             <!-- Draggable camera overlay -->
             <div class="cam-overlay" id="cam-overlay" style="display:none;">
               <video id="cam-overlay-video" autoplay muted playsinline></video>
@@ -262,8 +326,6 @@
                 <button class="cam-ctrl-btn" id="cam-corner-br" title="Bottom Right">↘</button>
               </div>
             </div>
-
-            <!-- Corner controls -->
             <div class="preview-corner-controls">
               <button class="corner-btn" id="screen-btn-fullscreen" title="Fullscreen">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
@@ -274,7 +336,6 @@
 
         <!-- Screen Controls Bar -->
         <div class="controls-bar screen-controls-bar">
-          <!-- Mic source -->
           <div class="source-group">
             <label class="control-label">MIC SOURCE</label>
             <div class="select-wrapper">
@@ -283,8 +344,6 @@
               </select>
             </div>
           </div>
-
-          <!-- Camera overlay source -->
           <div class="source-group">
             <label class="control-label">CAMERA OVERLAY</label>
             <div class="select-wrapper">
@@ -293,8 +352,6 @@
               </select>
             </div>
           </div>
-
-          <!-- Cam size -->
           <div class="source-group" style="max-width:140px">
             <label class="control-label">CAM SIZE</label>
             <div class="select-wrapper">
@@ -305,20 +362,14 @@
               </select>
             </div>
           </div>
-
-          <!-- Format -->
           <div class="source-group" style="max-width:160px">
             <label class="control-label">FORMAT</label>
             <div class="select-wrapper">
               <select id="screen-select-format" class="fancy-select">
-                <option value="video/webm;codecs=vp9,opus">WebM / VP9</option>
-                <option value="video/webm;codecs=vp8,opus">WebM / VP8</option>
-                <option value="video/mp4">MP4</option>
+                <!-- populated dynamically by app.js -->
               </select>
             </div>
           </div>
-
-          <!-- Screen record main button -->
           <div class="record-btn-wrap">
             <button id="btn-screen-record" class="record-btn screen-record-btn" title="Start screen recording">
               <div class="record-btn-inner">
@@ -327,8 +378,6 @@
             </button>
             <span class="record-btn-label" id="screen-record-btn-label">CAPTURE</span>
           </div>
-
-          <!-- Pause / Stop -->
           <div class="secondary-controls">
             <button id="btn-screen-pause" class="sec-btn" disabled title="Pause">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
@@ -337,8 +386,6 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
             </button>
           </div>
-
-          <!-- Cam toggle -->
           <div class="secondary-controls">
             <button id="btn-toggle-cam-overlay" class="sec-btn cam-toggle-btn" disabled title="Toggle camera overlay">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
@@ -346,7 +393,6 @@
           </div>
         </div>
 
-        <!-- Status bar -->
         <div class="status-bar">
           <span id="screen-status-msg" class="status-idle">Ready to capture — click CAPTURE to select screen/window</span>
           <div class="status-right">
