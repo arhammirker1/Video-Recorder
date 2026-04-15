@@ -9,8 +9,8 @@
   const canvas = document.getElementById('noise-canvas');
   const ctx = canvas.getContext('2d');
   let noiseThrottle = null;
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-function draw() {
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  function draw() {
     const { width, height } = canvas;
     const img = ctx.createImageData(width, height);
     const buf = new Uint32Array(img.data.buffer);
@@ -20,10 +20,11 @@ function draw() {
     }
     ctx.putImageData(img, 0, 0);
   }
-  state.meterInterval = setInterval(() => {
-      if (!state.settings.showMeter) return;
-      state.analyser.getByteFrequencyData(data);
-      bars.forEach((bar, i) => {
+  resize(); draw();
+  window.addEventListener('resize', () => {
+    clearTimeout(noiseThrottle);
+    noiseThrottle = setTimeout(() => { resize(); draw(); }, 300);
+  });
 })();
 
 // ── MIME Type Detection — run once at startup ────────────────────────────────
