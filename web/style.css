@@ -161,8 +161,8 @@ body {
 /* ── Main ───────────────────────────────────────────────────────────────── */
 #main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
 
-.panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
-.panel.active { display: flex; }
+.panel { display: none !important; flex: 1; flex-direction: column; overflow: hidden; }
+.panel.active { display: flex !important; }
 
 /* ── Shared preview ──────────────────────────────────────────────────────── */
 .preview-wrapper {
