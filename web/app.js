@@ -967,10 +967,13 @@ function bindNavigation() {
   $$('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const panel = btn.dataset.panel;
+      const target = $(`panel-${panel}`);
+      if (!target) { console.warn('Panel not found:', panel); return; }
       $$('.nav-btn').forEach(b => b.classList.remove('active'));
-      $$('.panel').forEach(p => p.classList.remove('active'));
+      $$('.panel').forEach(p => { p.classList.remove('active'); p.style.display = 'none'; });
       btn.classList.add('active');
-      $(`panel-${panel}`).classList.add('active');
+      target.classList.add('active');
+      target.style.display = 'flex';
       if (panel === 'library') renderLibrary();
     });
   });
