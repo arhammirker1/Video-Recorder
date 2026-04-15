@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VaultCam — Studio Recorder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Noise texture overlay -->
+  <canvas id="noise-canvas"></canvas>
+
+  <div id="app">
+    <!-- Sidebar / Widget Panel -->
+    <aside id="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <circle cx="11" cy="11" r="10" stroke="#e8ff47" stroke-width="1.5"/>
+            <circle cx="11" cy="11" r="4" fill="#e8ff47"/>
+          </svg>
+        </div>
+        <span class="logo-text">VaultCam</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-btn active" data-panel="record" title="Record">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg>
+          <span>Record</span>
+        </button>
+        <button class="nav-btn" data-panel="library" title="Library">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <span>Library</span>
+        </button>
+        <button class="nav-btn" data-panel="settings" title="Settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <span>Settings</span>
+        </button>
+      </nav>
+
+      <!-- Widgets -->
+      <div class="widgets-section">
+        <p class="widgets-label">WIDGETS</p>
+
+        <!-- Timer Widget -->
+        <div class="widget" id="widget-timer">
+          <div class="widget-header">
+            <span class="widget-icon">⏱</span>
+            <span class="widget-title">Timer</span>
+          </div>
+          <div class="timer-display" id="timer-display">00:00:00</div>
+        </div>
+
+        <!-- Audio Meter Widget -->
+        <div class="widget" id="widget-audio">
+          <div class="widget-header">
+            <span class="widget-icon">🎙</span>
+            <span class="widget-title">Audio Level</span>
+          </div>
+          <div class="audio-meter">
+            <div class="meter-bars" id="meter-bars">
+              <div class="meter-bar" style="--i:0"></div>
+              <div class="meter-bar" style="--i:1"></div>
+              <div class="meter-bar" style="--i:2"></div>
+              <div class="meter-bar" style="--i:3"></div>
+              <div class="meter-bar" style="--i:4"></div>
+              <div class="meter-bar" style="--i:5"></div>
+              <div class="meter-bar" style="--i:6"></div>
+              <div class="meter-bar" style="--i:7"></div>
+              <div class="meter-bar" style="--i:8"></div>
+              <div class="meter-bar" style="--i:9"></div>
+              <div class="meter-bar" style="--i:10"></div>
+              <div class="meter-bar" style="--i:11"></div>
+              <div class="meter-bar" style="--i:12"></div>
+              <div class="meter-bar" style="--i:13"></div>
+              <div class="meter-bar" style="--i:14"></div>
+              <div class="meter-bar" style="--i:15"></div>
+            </div>
+            <div class="meter-label-row">
+              <span>-40</span><span>-20</span><span>-10</span><span>0dB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Storage Widget -->
+        <div class="widget" id="widget-storage">
+          <div class="widget-header">
+            <span class="widget-icon">💾</span>
+            <span class="widget-title">Storage</span>
+          </div>
+          <div class="storage-info">
+            <div class="storage-bar-bg">
+              <div class="storage-bar-fill" id="storage-fill" style="width:32%"></div>
+            </div>
+            <div class="storage-text">
+              <span id="storage-used">3.2 GB used</span>
+              <span id="storage-free">Free: ~6.8 GB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quality Widget -->
+        <div class="widget" id="widget-quality">
+          <div class="widget-header">
+            <span class="widget-icon">✦</span>
+            <span class="widget-title">Quality</span>
+          </div>
+          <div class="quality-badges">
+            <span class="q-badge active" id="q-badge-video">1080p</span>
+            <span class="q-badge active" id="q-badge-fps">60fps</span>
+            <span class="q-badge active" id="q-badge-audio">192kHz</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content area -->
+    <main id="main">
+      <!-- Record Panel -->
+      <section class="panel active" id="panel-record">
+        <!-- Preview area -->
+        <div class="preview-wrapper">
+          <div class="preview-frame" id="preview-frame">
+            <video id="preview-video" autoplay muted playsinline></video>
+            <div class="preview-overlay" id="preview-overlay">
+              <div class="preview-placeholder">
+                <div class="placeholder-icon">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                </div>
+                <p>Camera feed will appear here</p>
+                <p class="placeholder-sub">Select source and click Record</p>
+              </div>
+            </div>
+
+            <!-- Recording indicator -->
+            <div class="rec-badge" id="rec-badge">
+              <span class="rec-dot"></span>
+              <span>REC</span>
+              <span id="rec-time-badge">00:00</span>
+            </div>
+
+            <!-- Corner controls on preview -->
+            <div class="preview-corner-controls">
+              <button class="corner-btn" id="btn-pip" title="Picture-in-picture">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="14" y="10" width="8" height="6" rx="1" fill="currentColor" stroke="none"/></svg>
+              </button>
+              <button class="corner-btn" id="btn-fullscreen" title="Fullscreen preview">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls bar -->
+        <div class="controls-bar">
+          <!-- Source selector -->
+          <div class="source-group">
+            <label class="control-label">VIDEO SOURCE</label>
+            <div class="select-wrapper">
+              <select id="select-video" class="fancy-select">
+                <option value="">— Select camera —</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="source-group">
+            <label class="control-label">AUDIO SOURCE</label>
+            <div class="select-wrapper">
+              <select id="select-audio" class="fancy-select">
+                <option value="">— Select mic —</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="source-group">
+            <label class="control-label">FORMAT</label>
+            <div class="select-wrapper">
+              <select id="select-format" class="fancy-select">
+                <option value="video/webm;codecs=vp9,opus">WebM / VP9</option>
+                <option value="video/webm;codecs=vp8,opus">WebM / VP8</option>
+                <option value="video/mp4">MP4</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Main record button -->
+          <div class="record-btn-wrap">
+            <button id="btn-record" class="record-btn" title="Start recording">
+              <div class="record-btn-inner">
+                <div class="record-icon" id="record-icon"></div>
+              </div>
+            </button>
+            <span class="record-btn-label" id="record-btn-label">START</span>
+          </div>
+
+          <!-- Pause / Stop -->
+          <div class="secondary-controls">
+            <button id="btn-pause" class="sec-btn" disabled title="Pause">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            </button>
+            <button id="btn-stop" class="sec-btn" disabled title="Stop & save">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Status bar -->
+        <div class="status-bar">
+          <span id="status-msg" class="status-idle">Ready to record</span>
+          <div class="status-right">
+            <span id="bitrate-display" class="mono-stat"></span>
+            <span id="size-display" class="mono-stat"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Library Panel -->
+      <section class="panel" id="panel-library">
+        <div class="panel-header">
+          <h2 class="panel-title">Recordings</h2>
+          <button class="ghost-btn" id="btn-clear-library">Clear all</button>
+        </div>
+        <div class="library-grid" id="library-grid">
+          <div class="library-empty" id="library-empty">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <p>No recordings yet</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Panel -->
+      <section class="panel" id="panel-settings">
+        <div class="panel-header">
+          <h2 class="panel-title">Settings</h2>
+        </div>
+        <div class="settings-grid">
+
+          <div class="settings-card">
+            <h3 class="settings-card-title">Video Quality</h3>
+            <div class="setting-row">
+              <label>Resolution</label>
+              <select id="set-resolution" class="fancy-select sm">
+                <option value="3840x2160">4K (3840×2160)</option>
+                <option value="1920x1080" selected>FHD (1920×1080)</option>
+                <option value="1280x720">HD (1280×720)</option>
+                <option value="854x480">480p</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>Frame Rate</label>
+              <select id="set-fps" class="fancy-select sm">
+                <option value="60" selected>60 fps</option>
+                <option value="30">30 fps</option>
+                <option value="24">24 fps</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>Video Bitrate</label>
+              <select id="set-vbitrate" class="fancy-select sm">
+                <option value="8000000">8 Mbps (High)</option>
+                <option value="5000000" selected>5 Mbps (Medium)</option>
+                <option value="2500000">2.5 Mbps (Low)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3 class="settings-card-title">Audio Quality</h3>
+            <div class="setting-row">
+              <label>Sample Rate</label>
+              <select id="set-samplerate" class="fancy-select sm">
+                <option value="192000" selected>192 kHz</option>
+                <option value="96000">96 kHz</option>
+                <option value="48000">48 kHz</option>
+                <option value="44100">44.1 kHz</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>Channels</label>
+              <select id="set-channels" class="fancy-select sm">
+                <option value="2" selected>Stereo</option>
+                <option value="1">Mono</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>Echo Cancellation</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="set-echo" checked />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <label>Noise Suppression</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="set-noise" checked />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3 class="settings-card-title">Interface</h3>
+            <div class="setting-row">
+              <label>Countdown before record</label>
+              <select id="set-countdown" class="fancy-select sm">
+                <option value="0">None</option>
+                <option value="3" selected>3 seconds</option>
+                <option value="5">5 seconds</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>Auto-download on stop</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="set-autodownload" checked />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <label>Show audio meter</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="set-showmeter" checked />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+          </div>
+
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Countdown overlay -->
+  <div id="countdown-overlay" class="countdown-overlay hidden">
+    <div class="countdown-number" id="countdown-number">3</div>
+    <div class="countdown-label">Recording starts in…</div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
