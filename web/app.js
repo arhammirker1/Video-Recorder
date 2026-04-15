@@ -481,7 +481,6 @@ micStream = await navigator.mediaDevices.getUserMedia({
     channelCount: 2,
     echoCancellation: true,
     noiseSuppression: true,
-    noiseSuppression: true,
     autoGainControl: true,
     googNoiseSuppression: true,
     googHighpassFilter: true,
