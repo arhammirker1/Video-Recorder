@@ -8,8 +8,9 @@
 (function generateNoise() {
   const canvas = document.getElementById('noise-canvas');
   const ctx = canvas.getContext('2d');
-  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-  function draw() {
+  let noiseThrottle = null;
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+function draw() {
     const { width, height } = canvas;
     const img = ctx.createImageData(width, height);
     const buf = new Uint32Array(img.data.buffer);
@@ -19,8 +20,10 @@
     }
     ctx.putImageData(img, 0, 0);
   }
-  resize(); draw();
-  window.addEventListener('resize', () => { resize(); draw(); });
+  state.meterInterval = setInterval(() => {
+      if (!state.settings.showMeter) return;
+      state.analyser.getByteFrequencyData(data);
+      bars.forEach((bar, i) => {
 })();
 
 // ── MIME Type Detection — run once at startup ────────────────────────────────
@@ -243,8 +246,8 @@ async function startPreview() {
       ? { deviceId: { exact: selectVideo.value }, width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: +state.settings.fps } }
       : { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: +state.settings.fps } },
     audio: selectAudio.value
-      ? { deviceId: { exact: selectAudio.value }, sampleRate: Math.min(state.settings.sampleRate, 96000), channelCount: state.settings.channels, echoCancellation: state.settings.echoCancellation, noiseSuppression: state.settings.noiseSuppression, autoGainControl: false }
-      : { sampleRate: Math.min(state.settings.sampleRate, 96000), channelCount: state.settings.channels, echoCancellation: state.settings.echoCancellation, noiseSuppression: state.settings.noiseSuppression, autoGainControl: false }
+  ? { deviceId: { exact: selectAudio.value }, sampleRate: Math.min(state.settings.sampleRate, 96000), channelCount: state.settings.channels, echoCancellation: true, noiseSuppression: true, autoGainControl: true, googNoiseSuppression: true, googHighpassFilter: true, googNoiseSuppression2: true }
+  : { sampleRate: Math.min(state.settings.sampleRate, 96000), channelCount: state.settings.channels, echoCancellation: true, noiseSuppression: true, autoGainControl: true, googNoiseSuppression: true, googHighpassFilter: true, googNoiseSuppression2: true }
   };
 
   try {
@@ -323,7 +326,7 @@ function setupAudioMeter(stream) {
         bar.classList.toggle('active-mid',  val > 0.5  && val <= 0.8);
         bar.classList.toggle('active-high', val > 0.8);
       });
-    }, 50);
+    }, 100);
   } catch (e) { console.warn('Audio meter init:', e); }
 }
 
@@ -360,7 +363,7 @@ async function startRecording() {
   recorder.onstop = () => finalizeRecording(
     state.chunks, recorder.mimeType, 'camera', state.startTime, state.pausedTime
   );
-  recorder.start(250);
+  recorder.start(1000);
 
   state.isRecording = true;
   state.isPaused = false;
@@ -471,15 +474,19 @@ async function startScreenRecording() {
   let micStream = null;
   if (screenSelectAudio.value) {
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          deviceId: { exact: screenSelectAudio.value },
-          sampleRate: 48000,
-          channelCount: 2,
-          echoCancellation: state.settings.echoCancellation,
-          noiseSuppression: state.settings.noiseSuppression,
-          autoGainControl: false,
-        },
+micStream = await navigator.mediaDevices.getUserMedia({
+  audio: {
+    deviceId: { exact: screenSelectAudio.value },
+    sampleRate: 48000,
+    channelCount: 2,
+    echoCancellation: true,
+    noiseSuppression: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    googNoiseSuppression: true,
+    googHighpassFilter: true,
+    googNoiseSuppression2: true,
+  },
         video: false,
       });
       state.screenMicStream = micStream;
@@ -527,7 +534,7 @@ async function startScreenRecording() {
   recorder.onstop = () => finalizeRecording(
     state.screenChunks, recorder.mimeType, 'screen', state.screenStartTime, state.screenPausedTime
   );
-  recorder.start(250);
+  recorder.start(1000);
 
   state.isScreenRecording = true;
   state.isScreenPaused = false;
