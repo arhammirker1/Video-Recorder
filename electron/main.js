@@ -1,36 +1,46 @@
-const { app, BrowserWindow, shell, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, Menu, session } = require('electron');
 const path = require('path');
+
+const VERCEL_URL = 'https://vaultcam.vercel.app/';
 
 let win;
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1200,
-    height: 780,
-    minWidth: 900,
-    minHeight: 620,
+    width: 1280,
+    height: 820,
+    minWidth: 960,
+    minHeight: 640,
     backgroundColor: '#080810',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      // Allow camera/mic without extra prompts on desktop
-      permissions: ['camera', 'microphone'],
+      webSecurity: false, // allow cross-origin media
     },
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
   });
 
-  // ── Load the web app ──────────────────────────────────────────────────────
-  // In production, point to the built web folder served locally OR direct file
-  win.loadFile(path.join(__dirname, 'web', 'index.html'));
+  // ── Load from Vercel ──────────────────────────────────────────────────────
+  win.loadURL(VERCEL_URL);
 
-  // Grant media permissions automatically on desktop
+  // ── Grant ALL media permissions automatically ────────────────────────────
   win.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
-    const allowed = ['media', 'mediaKeySystem', 'geolocation', 'notifications', 'fullscreen', 'pointerLock'];
+    const allowed = [
+      'media', 'mediaKeySystem', 'geolocation',
+      'notifications', 'fullscreen', 'pointerLock',
+      'clipboard-read', 'clipboard-write',
+    ];
     callback(allowed.includes(permission));
   });
 
-  // Open external links in the system browser
+  // Allow display capture (screen recording) - critical for getDisplayMedia
+  win.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
+    // Auto-approve display media requests from the renderer
+    callback({ video: request.frame, audio: 'loopback' });
+  }, { useSystemPicker: true }); // use system picker so user can choose what to share
+
+  // Open external links in system browser
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
@@ -43,6 +53,13 @@ function createWindow() {
     }
   });
 
+  // Reload shortcut
+  win.webContents.on('before-input-event', (event, input) => {
+    if ((input.control || input.meta) && input.key === 'r') {
+      win.webContents.reload();
+    }
+  });
+
   Menu.setApplicationMenu(buildMenu());
 }
 
@@ -52,6 +69,8 @@ function buildMenu() {
       label: 'VaultCam',
       submenu: [
         { label: 'About VaultCam', role: 'about' },
+        { type: 'separator' },
+        { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => win?.webContents.reload() },
         { type: 'separator' },
         { label: 'Quit', accelerator: 'CmdOrCtrl+Q', role: 'quit' },
       ],
@@ -72,10 +91,11 @@ function buildMenu() {
         { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' },
+        { label: 'Toggle DevTools', accelerator: 'F12', click: () => win?.webContents.toggleDevTools() },
       ],
     },
   ];
-  return require('electron').Menu.buildFromTemplate(template);
+  return Menu.buildFromTemplate(template);
 }
 
 app.whenReady().then(createWindow);
@@ -88,6 +108,9 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-// Allow media access flags on Linux/Windows
-app.commandLine.appendSwitch('enable-features', 'WebRTC-H265WithOpenH264FFmpeg');
+// Flags for WebRTC / media
+app.commandLine.appendSwitch('enable-features', 'WebRTC-H265WithOpenH264FFmpeg,DesktopCaptureCroppedWindowRestore');
 app.commandLine.appendSwitch('use-fake-ui-for-media-stream', 'false');
+app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
+app.commandLine.appendSwitch('allow-http-screen-capture');
+app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');

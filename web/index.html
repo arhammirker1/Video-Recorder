@@ -10,11 +10,10 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Noise texture overlay -->
   <canvas id="noise-canvas"></canvas>
 
   <div id="app">
-    <!-- Sidebar / Widget Panel -->
+    <!-- ── Sidebar ─────────────────────────────────────────────────── -->
     <aside id="sidebar">
       <div class="sidebar-logo">
         <div class="logo-mark">
@@ -27,9 +26,13 @@
       </div>
 
       <nav class="sidebar-nav">
-        <button class="nav-btn active" data-panel="record" title="Record">
+        <button class="nav-btn active" data-panel="record" title="Camera Record">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/></svg>
-          <span>Record</span>
+          <span>Camera</span>
+        </button>
+        <button class="nav-btn" data-panel="screen" title="Screen Record">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="10" r="2" fill="currentColor" stroke="none"/></svg>
+          <span>Screen</span>
         </button>
         <button class="nav-btn" data-panel="library" title="Library">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
@@ -46,7 +49,7 @@
         <p class="widgets-label">WIDGETS</p>
 
         <!-- Timer Widget -->
-        <div class="widget" id="widget-timer">
+        <div class="widget">
           <div class="widget-header">
             <span class="widget-icon">⏱</span>
             <span class="widget-title">Timer</span>
@@ -54,30 +57,45 @@
           <div class="timer-display" id="timer-display">00:00:00</div>
         </div>
 
+        <!-- Screen Rec Widget -->
+        <div class="widget screen-widget" id="widget-screen-status">
+          <div class="widget-header">
+            <span class="widget-icon">🖥</span>
+            <span class="widget-title">Screen Rec</span>
+            <span class="screen-status-dot" id="screen-status-dot"></span>
+          </div>
+          <div class="screen-widget-info">
+            <div class="screen-info-row">
+              <span class="screen-info-label">Status</span>
+              <span class="screen-info-val" id="screen-widget-status">Idle</span>
+            </div>
+            <div class="screen-info-row">
+              <span class="screen-info-label">Size</span>
+              <span class="screen-info-val mono" id="screen-widget-size">—</span>
+            </div>
+            <div class="screen-info-row">
+              <span class="screen-info-label">Cam</span>
+              <span class="screen-info-val" id="screen-widget-cam">Off</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Audio Meter Widget -->
-        <div class="widget" id="widget-audio">
+        <div class="widget">
           <div class="widget-header">
             <span class="widget-icon">🎙</span>
             <span class="widget-title">Audio Level</span>
           </div>
           <div class="audio-meter">
             <div class="meter-bars" id="meter-bars">
-              <div class="meter-bar" style="--i:0"></div>
-              <div class="meter-bar" style="--i:1"></div>
-              <div class="meter-bar" style="--i:2"></div>
-              <div class="meter-bar" style="--i:3"></div>
-              <div class="meter-bar" style="--i:4"></div>
-              <div class="meter-bar" style="--i:5"></div>
-              <div class="meter-bar" style="--i:6"></div>
-              <div class="meter-bar" style="--i:7"></div>
-              <div class="meter-bar" style="--i:8"></div>
-              <div class="meter-bar" style="--i:9"></div>
-              <div class="meter-bar" style="--i:10"></div>
-              <div class="meter-bar" style="--i:11"></div>
-              <div class="meter-bar" style="--i:12"></div>
-              <div class="meter-bar" style="--i:13"></div>
-              <div class="meter-bar" style="--i:14"></div>
-              <div class="meter-bar" style="--i:15"></div>
+              <div class="meter-bar"></div><div class="meter-bar"></div>
+              <div class="meter-bar"></div><div class="meter-bar"></div>
+              <div class="meter-bar"></div><div class="meter-bar"></div>
+              <div class="meter-bar"></div><div class="meter-bar"></div>
+              <div class="meter-bar"></div><div class="meter-bar"></div>
+              <div class="meter-bar"></div><div class="meter-bar"></div>
+              <div class="meter-bar"></div><div class="meter-bar"></div>
+              <div class="meter-bar"></div><div class="meter-bar"></div>
             </div>
             <div class="meter-label-row">
               <span>-40</span><span>-20</span><span>-10</span><span>0dB</span>
@@ -86,7 +104,7 @@
         </div>
 
         <!-- Storage Widget -->
-        <div class="widget" id="widget-storage">
+        <div class="widget">
           <div class="widget-header">
             <span class="widget-icon">💾</span>
             <span class="widget-title">Storage</span>
@@ -103,7 +121,7 @@
         </div>
 
         <!-- Quality Widget -->
-        <div class="widget" id="widget-quality">
+        <div class="widget">
           <div class="widget-header">
             <span class="widget-icon">✦</span>
             <span class="widget-title">Quality</span>
@@ -117,46 +135,38 @@
       </div>
     </aside>
 
-    <!-- Main content area -->
+    <!-- ── Main ────────────────────────────────────────────────────── -->
     <main id="main">
-      <!-- Record Panel -->
+
+      <!-- ── Camera Record Panel ───────────────────────────────────── -->
       <section class="panel active" id="panel-record">
-        <!-- Preview area -->
         <div class="preview-wrapper">
           <div class="preview-frame" id="preview-frame">
             <video id="preview-video" autoplay muted playsinline></video>
             <div class="preview-overlay" id="preview-overlay">
               <div class="preview-placeholder">
-                <div class="placeholder-icon">
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                </div>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
                 <p>Camera feed will appear here</p>
                 <p class="placeholder-sub">Select source and click Record</p>
               </div>
             </div>
-
-            <!-- Recording indicator -->
             <div class="rec-badge" id="rec-badge">
               <span class="rec-dot"></span>
               <span>REC</span>
               <span id="rec-time-badge">00:00</span>
             </div>
-
-            <!-- Corner controls on preview -->
             <div class="preview-corner-controls">
               <button class="corner-btn" id="btn-pip" title="Picture-in-picture">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="14" y="10" width="8" height="6" rx="1" fill="currentColor" stroke="none"/></svg>
               </button>
-              <button class="corner-btn" id="btn-fullscreen" title="Fullscreen preview">
+              <button class="corner-btn" id="btn-fullscreen" title="Fullscreen">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
               </button>
             </div>
           </div>
         </div>
 
-        <!-- Controls bar -->
         <div class="controls-bar">
-          <!-- Source selector -->
           <div class="source-group">
             <label class="control-label">VIDEO SOURCE</label>
             <div class="select-wrapper">
@@ -165,7 +175,6 @@
               </select>
             </div>
           </div>
-
           <div class="source-group">
             <label class="control-label">AUDIO SOURCE</label>
             <div class="select-wrapper">
@@ -174,7 +183,6 @@
               </select>
             </div>
           </div>
-
           <div class="source-group">
             <label class="control-label">FORMAT</label>
             <div class="select-wrapper">
@@ -185,8 +193,6 @@
               </select>
             </div>
           </div>
-
-          <!-- Main record button -->
           <div class="record-btn-wrap">
             <button id="btn-record" class="record-btn" title="Start recording">
               <div class="record-btn-inner">
@@ -195,8 +201,6 @@
             </button>
             <span class="record-btn-label" id="record-btn-label">START</span>
           </div>
-
-          <!-- Pause / Stop -->
           <div class="secondary-controls">
             <button id="btn-pause" class="sec-btn" disabled title="Pause">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
@@ -207,7 +211,6 @@
           </div>
         </div>
 
-        <!-- Status bar -->
         <div class="status-bar">
           <span id="status-msg" class="status-idle">Ready to record</span>
           <div class="status-right">
@@ -217,7 +220,143 @@
         </div>
       </section>
 
-      <!-- Library Panel -->
+      <!-- ── Screen Record Panel ──────────────────────────────────── -->
+      <section class="panel" id="panel-screen">
+        <!-- Screen preview area -->
+        <div class="preview-wrapper screen-preview-wrapper">
+          <div class="preview-frame screen-preview-frame" id="screen-preview-frame">
+
+            <!-- Screen feed -->
+            <video id="screen-preview-video" autoplay muted playsinline></video>
+
+            <!-- Idle overlay -->
+            <div class="preview-overlay" id="screen-preview-overlay">
+              <div class="preview-placeholder">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M9 8l3 3 3-3" stroke-width="1.5"/></svg>
+                <p>Screen capture will appear here</p>
+                <p class="placeholder-sub">Click Start Capture to choose what to record</p>
+              </div>
+            </div>
+
+            <!-- REC badge -->
+            <div class="rec-badge screen-rec-badge" id="screen-rec-badge">
+              <span class="rec-dot screen-dot"></span>
+              <span>SCREEN REC</span>
+              <span id="screen-rec-time-badge">00:00</span>
+            </div>
+
+            <!-- Draggable camera overlay -->
+            <div class="cam-overlay" id="cam-overlay" style="display:none;">
+              <video id="cam-overlay-video" autoplay muted playsinline></video>
+              <div class="cam-overlay-drag-handle" id="cam-drag-handle">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" opacity="0.7">
+                  <circle cx="3" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/>
+                  <circle cx="3" cy="9" r="1.2"/><circle cx="9" cy="9" r="1.2"/>
+                </svg>
+              </div>
+              <div class="cam-overlay-resize" id="cam-resize-handle"></div>
+              <div class="cam-overlay-controls">
+                <button class="cam-ctrl-btn" id="cam-corner-tl" title="Top Left">↖</button>
+                <button class="cam-ctrl-btn" id="cam-corner-tr" title="Top Right">↗</button>
+                <button class="cam-ctrl-btn" id="cam-corner-bl" title="Bottom Left">↙</button>
+                <button class="cam-ctrl-btn" id="cam-corner-br" title="Bottom Right">↘</button>
+              </div>
+            </div>
+
+            <!-- Corner controls -->
+            <div class="preview-corner-controls">
+              <button class="corner-btn" id="screen-btn-fullscreen" title="Fullscreen">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Screen Controls Bar -->
+        <div class="controls-bar screen-controls-bar">
+          <!-- Mic source -->
+          <div class="source-group">
+            <label class="control-label">MIC SOURCE</label>
+            <div class="select-wrapper">
+              <select id="screen-select-audio" class="fancy-select">
+                <option value="">— No mic —</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Camera overlay source -->
+          <div class="source-group">
+            <label class="control-label">CAMERA OVERLAY</label>
+            <div class="select-wrapper">
+              <select id="screen-select-camera" class="fancy-select">
+                <option value="">— No camera —</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Cam size -->
+          <div class="source-group" style="max-width:140px">
+            <label class="control-label">CAM SIZE</label>
+            <div class="select-wrapper">
+              <select id="screen-cam-size" class="fancy-select">
+                <option value="small">Small (20%)</option>
+                <option value="medium" selected>Medium (28%)</option>
+                <option value="large">Large (36%)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Format -->
+          <div class="source-group" style="max-width:160px">
+            <label class="control-label">FORMAT</label>
+            <div class="select-wrapper">
+              <select id="screen-select-format" class="fancy-select">
+                <option value="video/webm;codecs=vp9,opus">WebM / VP9</option>
+                <option value="video/webm;codecs=vp8,opus">WebM / VP8</option>
+                <option value="video/mp4">MP4</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Screen record main button -->
+          <div class="record-btn-wrap">
+            <button id="btn-screen-record" class="record-btn screen-record-btn" title="Start screen recording">
+              <div class="record-btn-inner">
+                <div class="record-icon screen-record-icon" id="screen-record-icon"></div>
+              </div>
+            </button>
+            <span class="record-btn-label" id="screen-record-btn-label">CAPTURE</span>
+          </div>
+
+          <!-- Pause / Stop -->
+          <div class="secondary-controls">
+            <button id="btn-screen-pause" class="sec-btn" disabled title="Pause">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            </button>
+            <button id="btn-screen-stop" class="sec-btn" disabled title="Stop & save">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+          </div>
+
+          <!-- Cam toggle -->
+          <div class="secondary-controls">
+            <button id="btn-toggle-cam-overlay" class="sec-btn cam-toggle-btn" disabled title="Toggle camera overlay">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Status bar -->
+        <div class="status-bar">
+          <span id="screen-status-msg" class="status-idle">Ready to capture — click CAPTURE to select screen/window</span>
+          <div class="status-right">
+            <span id="screen-bitrate-display" class="mono-stat"></span>
+            <span id="screen-size-display" class="mono-stat"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Library Panel ─────────────────────────────────────────── -->
       <section class="panel" id="panel-library">
         <div class="panel-header">
           <h2 class="panel-title">Recordings</h2>
@@ -231,7 +370,7 @@
         </div>
       </section>
 
-      <!-- Settings Panel -->
+      <!-- ── Settings Panel ────────────────────────────────────────── -->
       <section class="panel" id="panel-settings">
         <div class="panel-header">
           <h2 class="panel-title">Settings</h2>
@@ -264,6 +403,42 @@
                 <option value="5000000" selected>5 Mbps (Medium)</option>
                 <option value="2500000">2.5 Mbps (Low)</option>
               </select>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3 class="settings-card-title">Screen Recorder</h3>
+            <div class="setting-row">
+              <label>Screen Bitrate</label>
+              <select id="set-screen-vbitrate" class="fancy-select sm">
+                <option value="16000000">16 Mbps (Ultra)</option>
+                <option value="10000000" selected>10 Mbps (High)</option>
+                <option value="6000000">6 Mbps (Medium)</option>
+                <option value="3000000">3 Mbps (Low)</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>Screen FPS</label>
+              <select id="set-screen-fps" class="fancy-select sm">
+                <option value="60" selected>60 fps</option>
+                <option value="30">30 fps</option>
+                <option value="24">24 fps</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>Cam Overlay Shape</label>
+              <select id="set-cam-shape" class="fancy-select sm">
+                <option value="circle">Circle</option>
+                <option value="rounded" selected>Rounded Rect</option>
+                <option value="rect">Rectangle</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>Cam Overlay Border</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="set-cam-border" checked />
+                <span class="toggle-track"></span>
+              </label>
             </div>
           </div>
 
